@@ -1,41 +1,60 @@
+local nodes = { --this table save all nodes to use in operations like get_node etc.
+}
+
+local ingame_values = { -- In Game Values (possible set from another script?)
+	height = 2999,
+	temp = -2
+}
+
 function init(self)
-	-- Add initialization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
+	msg.post(".", "acquire_input_focus")
+
+	-- Operational parts of GUI
+	nodes.control_zone_down = gui.get_node("control_zone_down")
+	nodes.control_zone_up = gui.get_node("control_zone_up")
+	nodes.distance = gui.get_node("distance")
+	nodes.fuel = gui.get_node("fuel")
+	nodes.lift = gui.get_node("lift")
+	nodes.position = gui.get_node("position")
+	nodes.height = gui.get_node("height")
+	nodes.control_tip_down = gui.get_node("control_tip_down")
+	nodes.control_tip_up = gui.get_node("control_tip_up")
+	
+	gui.set_enabled(nodes.control_zone_down, false)
+	gui.set_enabled(nodes.control_zone_up, false)
 end
 
 function final(self)
 	-- Add finalization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
 end
 
 function update(self, dt)
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
+	local temp_sign = (ingame_values.temp >= 0) and "+" or ""
+	local heigh_text = "height:" .. ingame_values.height .. " m" .. "\n" .. "temp: " .. temp_sign .. ingame_values.temp  .. " C"
+	gui.set_text(nodes.height, heigh_text)
 end
 
 function on_message(self, message_id, message, sender)
-	-- Add message-handling code here
-	-- Learn more: https://defold.com/manuals/message-passing/
-	-- Remove this function if not needed
+	if message_id == hash("hud") then
+		ingame_values.height = message.height - message.height % 1 -- show only integer value
+		ingame_values.temp = message.temp - message.temp % 1
+	end
 end
 
 function on_input(self, action_id, action)
-	-- Add input-handling code here. The game object this script is attached to
-	-- must have acquired input focus:
-	--
-	--    msg.post(".", "acquire_input_focus")
-	--
-	-- All mapped input bindings will be received. Mouse and touch input will
-	-- be received regardless of where on the screen it happened.
-	-- Learn more: https://defold.com/manuals/input/
-	-- Remove this function if not needed
+	if action_id == hash("touch") and action.pressed then
+		if gui.pick_node(nodes.control_zone_down, action.x, action.y) then
+			-- action then user press "move down"
+			msg.post("/main#main", "lift_down")
+		elseif gui.pick_node(nodes.control_zone_up, action.x, action.y) then
+			-- action then user press "move up"
+			msg.post("/main#main", "lift_up")
+		end
+	end
 end
 
-function on_reload(self)
+--[[function on_reload(self)
 	-- Add reload-handling code here
 	-- Learn more: https://defold.com/manuals/hot-reload/
 	-- Remove this function if not needed
-end
+end]]

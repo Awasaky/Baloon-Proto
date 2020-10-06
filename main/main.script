@@ -1,10 +1,101 @@
+local do_math = require("assets.scripts.do_math")
+
+-- Script inside constants
+local const = {
+	height_ceil = 10000,
+	height_floor = 100,
+	ascent_lift = 500,
+	ascent_time = 3.5,
+	descent_lift = -350,
+	descent_time = 1.0,
+	temp_ceil = -35,
+	temp_floor = 0
+}
+
+-- Script inside variables
+local variables ={
+	height_start = 1000,
+	lift_state = "idle",
+	temp_today = 15,
+	ballon_temp = 0
+}
+
 function init(self)
-	msg.post(".", "acquire_input_focus")
-	msg.post("@render:", "use_fixed_fit_projection", { near = -1, far = 1 })	
+	msg.post("@render:", "use_fixed_fit_projection", { near = -1, far = 1 })
+	--Animable variables
+	go.property("height", 0)
+	self.height = variables.height_start
 end
 
+local function lift_cancel()
+	variables.lift_state = "idle"
+	go.cancel_animations("#", "height")
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("lift_down") then
+		if variables.lift_state == "idle" then
+			variables.lift_state = "descent"
+			local new_height = self.height + const.descent_lift
+			go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_LINEAR, const.descent_time, 0, lift_cancel)
+		elseif variables.lift_state == "descent" then -- second pressure cancel lift
+			lift_cancel()
+		end
+	elseif message_id == hash("lift_up") then
+		if variables.lift_state == "idle" then
+			variables.lift_state = "ascent"
+			local new_height = self.height + const.ascent_lift
+			go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_OUTCIRC, const.ascent_time, 0, lift_cancel)
+		elseif variables.lift_state == "ascent" then -- second pressure cancel lift
+			lift_cancel()
+		end
+	end
+end
+
+function update(self, dt)
+	local height_coef = do_math.rev_lerp_number(self.height, const.height_ceil, const.height_floor)
+	variables.ballon_temp = variables.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
+
+	msg.post("/gui#generic", "hud", {
+		height = self.height,
+		temp = variables.ballon_temp
+	})
+end
+
+--[[
 function on_input(self, action_id, action)
 	if action_id == hash("touch") and action.pressed then
 		print("Touch!")
 	end
 end
+
+function init(self)
+-- Add initialization code here
+-- Learn more: https://defold.com/manuals/script/
+-- Remove this function if not needed
+end
+
+function final(self)
+-- Add finalization code here
+-- Learn more: https://defold.com/manuals/script/
+-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+-- Add input-handling code here. The game object this script is attached to
+-- must have acquired input focus:
+--
+--    msg.post(".", "acquire_input_focus")
+--
+-- All mapped input bindings will be received. Mouse and touch input will
+-- be received regardless of where on the screen it happened.
+-- Learn more: https://defold.com/manuals/input/
+-- Remove this function if not needed
+end
+
+function on_reload(self)
+-- Add reload-handling code here
+-- Learn more: https://defold.com/manuals/hot-reload/
+-- Remove this function if not needed
+end
+]]
