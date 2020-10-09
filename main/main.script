@@ -9,11 +9,13 @@ local const = {
 	descent_lift = -350,
 	descent_time = 1.0,
 	temp_ceil = -35,
-	temp_floor = 0
+	temp_floor = 0,
+	back_dist = 3600,
+	back_start = 900
 }
 
 -- Script inside variables
-local variables ={
+local variables = {
 	height_start = 1000,
 	lift_state = "idle",
 	temp_today = 15,
@@ -25,6 +27,12 @@ function init(self)
 	--Animable variables
 	go.property("height", 0)
 	self.height = variables.height_start
+	msg.post("/clouds#clouds", "positioning", {
+		height_ceil = const.height_ceil,
+		height_floor = const.height_floor,
+		back_dist = const.back_dist,
+		back_start = const.back_start
+	})
 end
 
 local function lift_cancel()
@@ -38,24 +46,31 @@ function on_message(self, message_id, message, sender)
 			variables.lift_state = "descent"
 			local new_height = self.height + const.descent_lift
 			go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_LINEAR, const.descent_time, 0, lift_cancel)
-		elseif variables.lift_state == "descent" then -- second pressure cancel lift
+		else
 			lift_cancel()
 		end
 	elseif message_id == hash("lift_up") then
-		if variables.lift_state == "idle" then
-			variables.lift_state = "ascent"
-			local new_height = self.height + const.ascent_lift
-			go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_OUTCIRC, const.ascent_time, 0, lift_cancel)
-		elseif variables.lift_state == "ascent" then -- second pressure cancel lift
-			lift_cancel()
-		end
+		lift_cancel()
+		variables.lift_state = "ascent"
+		local new_height = self.height + const.ascent_lift
+		go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_OUTCIRC, const.ascent_time, 0, lift_cancel)
 	end
 end
 
 function update(self, dt)
 	local height_coef = do_math.rev_lerp_number(self.height, const.height_ceil, const.height_floor)
+
+	--update temp
 	variables.ballon_temp = variables.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
 
+	-- reposition back vec2 depended by height
+	local back_pos = go.get_position("/back")
+	back_pos.y = const.back_start - const.back_dist * height_coef
+	go.set_position(back_pos, "/back")	
+	--reposition clouds
+	go.set("/clouds#clouds", "height", self.height)
+
+	--update gui
 	msg.post("/gui#generic", "hud", {
 		height = self.height,
 		temp = variables.ballon_temp

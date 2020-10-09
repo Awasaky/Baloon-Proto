@@ -1,0 +1,67 @@
+go.property("height", 0) -- used to reposition clouds
+
+local do_math = require("assets.scripts.do_math")
+local pool = {} -- collection of spawned clouds id
+local variables = {}
+const = {
+	spawn_time_min = 2,
+	spawn_time_max = 10, -- in seconds
+	speed_min = 500, -- in m/s
+	speed_max = 2500, 
+	height_ceil = 00,
+	height_floor = 00,
+	back_dist = 00,
+	back_start = 00,
+	pix_coef = 0, -- how much meters in pixel
+	basket_y = 00
+}
+
+local function renew_next_cloud()
+	variables.next_time = const.spawn_time_min + const.spawn_time_max * math.random()
+	variables.next_speed = const.speed_min + const.speed_max * math.random()
+	variables.next_height = const.height_floor + const.height_ceil * math.random()
+	local is_passing = ( math.random(2) == 2 ) -- if true - send passing cloud else send counter
+	if not is_passing then
+		variables.next_speed = -variables.next_speed
+	end
+end
+
+local function new_spawn()
+	pool[#pool + 1] = {
+		id = factory.create("#factory"),
+		speed = variables.next_speed,
+		height = variables.next_height
+	}
+
+	renew_next_cloud()
+	variables.spawn_timer = timer.delay(variables.next_time, false, new_spawn)
+end
+
+function init(self)
+	math.randomseed(os.time())
+	local basket_pos = go.get_position("/main")
+	const.basket_y = basket_pos.y
+end
+
+function update(self, dt)
+	--reposition clouds
+	for i = 1, #pool do
+		local height_offset = ( pool[i].height - self.height ) * const.pix_coef
+		local pos = go.get_position(pool[i].id)
+		pos.y = const.basket_y + height_offset
+		go.set_position(pos, pool[i].id)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("positioning") then -- only main object use starting height constants
+		for key, val in pairs(message) do
+			const[key] = message[key]
+		end
+		const.height_ceil = 3000 --DEBUG
+		-- cloud producing start
+		const.pix_coef = (const.height_ceil - const.height_floor) / const.back_dist
+		renew_next_cloud()
+		variables.spawn_timer = timer.delay(variables.next_time, false, new_spawn)
+	end
+end
