@@ -6,22 +6,26 @@ local variables = {}
 const = {
 	spawn_time_min = 2,
 	spawn_time_max = 10, -- in seconds
-	speed_min = 500, -- in m/s
-	speed_max = 2500, 
+	speed_min = 100, -- in m/s
+	speed_max = 500, 
 	height_ceil = 00,
 	height_floor = 00,
 	back_dist = 00,
 	back_start = 00,
 	pix_coef = 0, -- how much meters in pixel
-	basket_y = 00
+	basket_y = 00,
+	width = 00,
+	sprite_size = 1900
 }
 
 local function renew_next_cloud()
 	variables.next_time = const.spawn_time_min + const.spawn_time_max * math.random()
 	variables.next_speed = const.speed_min + const.speed_max * math.random()
-	variables.next_height = const.height_floor + const.height_ceil * math.random()
-	local is_passing = ( math.random(2) == 2 ) -- if true - send passing cloud else send counter
-	if not is_passing then
+	--DEBUG
+	variables.next_height = const.height_floor + 2000 * math.random()
+	--variables.next_height = const.height_floor + const.height_ceil * math.random()
+	local is_not_passing = ( math.random(2) == 2 ) -- if true - send passing cloud else send counter
+	if is_not_passing then
 		variables.next_speed = -variables.next_speed
 	end
 end
@@ -32,6 +36,12 @@ local function new_spawn()
 		speed = variables.next_speed,
 		height = variables.next_height
 	}
+	--repos last cloud
+	local pos = go.get_position(pool[#pool].id)
+	local offset = -variables.next_speed / const.pix_coef * 3
+	offset = ( variables.next_speed > 0 ) and offset-const.width or offset+const.width
+	pos.x = const.width / 2 + offset
+	go.set_position(pos, pool[#pool].id)
 
 	renew_next_cloud()
 	variables.spawn_timer = timer.delay(variables.next_time, false, new_spawn)
@@ -41,15 +51,23 @@ function init(self)
 	math.randomseed(os.time())
 	local basket_pos = go.get_position("/main")
 	const.basket_y = basket_pos.y
+	const.width = tonumber(sys.get_config("display.width"))
 end
 
 function update(self, dt)
 	--reposition clouds
-	for i = 1, #pool do
+	for i = #pool, 1, -1 do
 		local height_offset = ( pool[i].height - self.height ) * const.pix_coef
 		local pos = go.get_position(pool[i].id)
+		pos.x = pos.x + pool[i].speed / const.pix_coef * dt
 		pos.y = const.basket_y + height_offset
 		go.set_position(pos, pool[i].id)
+		local positive_speed_out = (pool[i].speed > 0 and pos.x > const.width + const.sprite_size * 2)
+		local negative_speed_out = (pool[i].speed < 0 and pos.x < 0 - const.sprite_size * 2)
+		if positive_speed_out or negative_speed_out then
+			go.delete(pool[i].id)
+			table.remove(pool,i)
+		end
 	end
 end
 
@@ -58,7 +76,6 @@ function on_message(self, message_id, message, sender)
 		for key, val in pairs(message) do
 			const[key] = message[key]
 		end
-		const.height_ceil = 3000 --DEBUG
 		-- cloud producing start
 		const.pix_coef = (const.height_ceil - const.height_floor) / const.back_dist
 		renew_next_cloud()

@@ -209,22 +209,7 @@ embedded_instances {
   id: "back"
   children: "back1"
   children: "back2"
-  data: "components {\n"
-  "  id: \"back\"\n"
-  "  component: \"/main/back.script\"\n"
-  "  position {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "  }\n"
-  "  rotation {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "    w: 1.0\n"
-  "  }\n"
-  "}\n"
-  ""
+  data: ""
   position {
     x: 0.0
     y: 0.0
