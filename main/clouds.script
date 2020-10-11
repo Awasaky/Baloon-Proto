@@ -31,8 +31,9 @@ local function renew_next_cloud()
 end
 
 local function new_spawn()
+	local props = { speed = variables.next_speed, target = msg.url("cloud") }
 	pool[#pool + 1] = {
-		id = factory.create("#factory"),
+		id = factory.create("#factory", nil, nil, props),
 		speed = variables.next_speed,
 		height = variables.next_height
 	}
