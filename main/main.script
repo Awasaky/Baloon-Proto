@@ -4,10 +4,10 @@ local do_math = require("assets.scripts.do_math")
 local const = {
 	height_ceil = 10000,
 	height_floor = 100,
-	ascent_lift = 500,
-	ascent_time = 3.5,
-	descent_lift = -350,
-	descent_time = 1.0,
+	ascent_lift = 600,
+	ascent_speed = 250,
+	descent_lift = -400,
+	descent_speed = -200,
 	temp_ceil = -35,
 	temp_floor = 0,
 	back_dist = 3600,
@@ -18,86 +18,92 @@ local const = {
 }
 
 -- Script inside variables
-local variables = {
+local vars = {
 	height_start = 1000,
-	lift_state = "idle",
+	lift_state = "idle", -- possible "ascent", "descent",
 	temp_today = 15,
 	ballon_temp = 00,
 	back_speed = {},
 	prev_speed = 00,
 	traveled_dist = 00,
-	last_x = 00
+	prev_x = 00,
+	set_vert_speed = 00
 }
+
+go.property("height", 00)
 
 function init(self)
 	msg.post("@render:", "use_fixed_fit_projection", { near = -1, far = 1 })
-	--Animable variables
-	go.property("height", 0)
-	self.height = variables.height_start
-	msg.post("/clouds#clouds", "positioning", {
+	self.height = vars.height_start -- later maybe another height
+	msg.post("/clouds#clouds", "constants", {
 		height_ceil = const.height_ceil,
 		height_floor = const.height_floor,
 		back_dist = const.back_dist,
 		back_start = const.back_start
 	})
-	const.pix_coef = (const.height_ceil - const.height_floor) / const.back_dist
-end
-
-local function lift_cancel()
-	variables.lift_state = "idle"
-	go.cancel_animations("#", "height")
+	const.pix_coef = (const.height_ceil - const.height_floor) / const.back_dist -- m/pix
 end
 
 function on_message(self, message_id, message, sender)
-	if message_id == hash("lift_down") then
-		if variables.lift_state == "idle" then
-			variables.lift_state = "descent"
-			local new_height = self.height + const.descent_lift
-			go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_LINEAR, const.descent_time, 0, lift_cancel)
-		else
-			lift_cancel()
-		end
-	elseif message_id == hash("lift_up") then
-		lift_cancel()
-		variables.lift_state = "ascent"
-		local new_height = self.height + const.ascent_lift
-		go.animate("#","height", go.PLAYBACK_ONCE_FORWARD, new_height, go.EASING_OUTCIRC, const.ascent_time, 0, lift_cancel)
-	elseif message_id == hash("collision_response") then
+	if message_id == hash("collision_response") then
 		local full_url = msg.url(message.other_id)
 		full_url.fragment = "cloud"
-		variables.back_speed[#variables.back_speed+1] = go.get(full_url, "speed") --??
+		vars.back_speed[#vars.back_speed + 1] = go.get(full_url, "speed")
+	elseif message_id == hash("lift_down") then
+		vars.lift_state = "descent"
+	elseif message_id == hash("lift_up") then
+		vars.lift_state = "ascent"
+	elseif message_id == hash("lift_stop") then
+		vars.lift_state = "idle"
 	end
 end
 
 function update(self, dt)
+	local speed_change = 0
+	if vars.lift_state == "ascent" then
+		speed_change = const.ascent_speed
+	elseif vars.lift_state == "descent" then
+		speed_change = const.descent_speed
+	elseif vars.lift_state == "idle" then
+		if vars.set_vert_speed > const.ascent_speed * dt then
+			speed_change = -const.ascent_speed
+		elseif vars.set_vert_speed < const.descent_speed * dt then
+			speed_change = -const.descent_speed
+		end
+	end
+	vars.set_vert_speed = vars.set_vert_speed + speed_change * dt
+	vars.set_vert_speed = do_math.clamp_number(vars.set_vert_speed, const.ascent_lift, const.descent_lift)
+	self.height = self.height + vars.set_vert_speed * dt
+
+	--used to repos back
 	local height_coef = do_math.rev_lerp_number(self.height, const.height_ceil, const.height_floor)
 
 	--update temp
-	variables.ballon_temp = variables.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
+	vars.ballon_temp = vars.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
 
 	-- reposition back vec2 depended by height
 	local back_pos = go.get_position("/back")
 	--back_pos.x
-	local cumulative_speed = do_math.average(variables.back_speed)
-	variables.back_speed = {} -- reset table to next frame
-	cumulative_speed = do_math.lerp_number(const.speed_save, cumulative_speed, variables.prev_speed)
+	local cumulative_speed = do_math.average(vars.back_speed)
+	vars.back_speed = {} -- reset table to next frame
+	cumulative_speed = do_math.lerp_number(const.speed_save, cumulative_speed, vars.prev_speed)
+	vars.prev_speed = cumulative_speed
 	back_pos.x = back_pos.x - cumulative_speed * const.pix_coef * dt / 40
 	-- back reposition
 	if back_pos.x > const.back_width * 0.5 then back_pos.x = back_pos.x - const.back_width
 	elseif back_pos.x < const.back_width * -1.5 then back_pos.x = back_pos.x + const.back_width
 	end
-	variables.prev_speed = cumulative_speed
-	variables.traveled_dist = variables.traveled_dist - ( back_pos.x - variables.last_x ) * const.pix_coef
-	variables.last_x = back_pos.x
+	vars.traveled_dist = vars.traveled_dist - ( back_pos.x - vars.prev_x ) * const.pix_coef
+	vars.prev_x = back_pos.x
 	back_pos.y = const.back_start - const.back_dist * height_coef
-	go.set_position(back_pos, "/back")	
+	go.set_position(back_pos, "/back")
 	--reposition clouds
 	go.set("/clouds#clouds", "height", self.height)
 
 	--update gui
 	msg.post("/gui#generic", "hud", {
 		height = self.height,
-		temp = variables.ballon_temp,
-		dist = variables.traveled_dist
+		temp = vars.ballon_temp,
+		dist = vars.traveled_dist
 	})
 end

@@ -73,7 +73,7 @@ function update(self, dt)
 end
 
 function on_message(self, message_id, message, sender)
-	if message_id == hash("positioning") then -- only main object use starting height constants
+	if message_id == hash("constants") then -- only main object use starting height constants
 		for key, val in pairs(message) do
 			const[key] = message[key]
 		end

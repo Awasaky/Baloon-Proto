@@ -53,6 +53,8 @@ function on_input(self, action_id, action)
 			-- action then user press "move up"
 			msg.post("/main#main", "lift_up")
 		end
+	elseif action_id == hash("touch") and action.released then
+		msg.post("/main#main", "lift_stop")
 	end
 end
 
