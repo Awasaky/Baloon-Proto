@@ -31,13 +31,16 @@ end
 function update(self, dt)
 	local temp_sign = (ingame_values.temp >= 0) and "+" or ""
 	local heigh_text = "height:" .. ingame_values.height .. " m" .. "\n" .. "temp: " .. temp_sign .. ingame_values.temp  .. " C"
+	local distance_text = "Distance ->: " .. ingame_values.distance .. " m"
 	gui.set_text(nodes.height, heigh_text)
+	gui.set_text(nodes.distance, distance_text)
 end
 
 function on_message(self, message_id, message, sender)
 	if message_id == hash("hud") then
 		ingame_values.height = message.height - message.height % 1 -- show only integer value
 		ingame_values.temp = message.temp - message.temp % 1
+		ingame_values.distance = message.dist - message.dist % 1
 	end
 end
 

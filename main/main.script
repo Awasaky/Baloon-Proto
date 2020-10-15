@@ -12,6 +12,7 @@ local const = {
 	temp_floor = 0,
 	back_dist = 3600,
 	back_start = 900,
+	back_width = 7680,
 	pix_coef = 00,
 	speed_save = 0.75
 }
@@ -23,7 +24,9 @@ local variables = {
 	temp_today = 15,
 	ballon_temp = 00,
 	back_speed = {},
-	prev_speed = 00
+	prev_speed = 00,
+	traveled_dist = 00,
+	last_x = 00
 }
 
 function init(self)
@@ -75,18 +78,17 @@ function update(self, dt)
 	-- reposition back vec2 depended by height
 	local back_pos = go.get_position("/back")
 	--back_pos.x
-	local cumulative_speed = 0
-	for i = 1, #variables.back_speed do
-		cumulative_speed = cumulative_speed + variables.back_speed[i]
-	end
-	if #variables.back_speed > 0 then
-		cumulative_speed = cumulative_speed / #variables.back_speed
-	end
-	variables.back_speed = {}
-	cumulative_speed = cumulative_speed * ( 1 - const.speed_save ) + variables.prev_speed * const.speed_save
+	local cumulative_speed = do_math.average(variables.back_speed)
+	variables.back_speed = {} -- reset table to next frame
+	cumulative_speed = do_math.lerp_number(const.speed_save, cumulative_speed, variables.prev_speed)
 	back_pos.x = back_pos.x - cumulative_speed * const.pix_coef * dt / 40
+	-- back reposition
+	if back_pos.x > const.back_width * 0.5 then back_pos.x = back_pos.x - const.back_width
+	elseif back_pos.x < const.back_width * -1.5 then back_pos.x = back_pos.x + const.back_width
+	end
 	variables.prev_speed = cumulative_speed
-	--print(back_pos.x .. " done")
+	variables.traveled_dist = variables.traveled_dist - ( back_pos.x - variables.last_x ) * const.pix_coef
+	variables.last_x = back_pos.x
 	back_pos.y = const.back_start - const.back_dist * height_coef
 	go.set_position(back_pos, "/back")	
 	--reposition clouds
@@ -95,6 +97,7 @@ function update(self, dt)
 	--update gui
 	msg.post("/gui#generic", "hud", {
 		height = self.height,
-		temp = variables.ballon_temp
+		temp = variables.ballon_temp,
+		dist = variables.traveled_dist
 	})
 end

@@ -16,10 +16,22 @@ local function rev_lerp_number(val, upper, bottom) -- remember upper is first!
 	return (val-new_bottom)/(new_upper-new_bottom)
 end
 
+local function average(val_table)
+	local average_val = 0
+	for i = 1, #val_table do
+		average_val = average_val + val_table[i]
+	end
+	if #val_table > 0 then
+		average_val = average_val / #val_table
+	end
+	return average_val -- return 0 even if val_table empty
+end
+
 local M = {
 	clamp_number = clamp_number,
 	lerp_number = lerp_number,
-	rev_lerp_number = rev_lerp_number
+	rev_lerp_number = rev_lerp_number,
+	average = average
 }
 
 return M
