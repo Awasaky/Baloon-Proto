@@ -1,7 +1,16 @@
+local do_math = require("assets.scripts.do_math")
+
 local nodes = { --this table save all nodes to use in operations like get_node etc.
 }
 
-local ingame_values = { -- In Game Values (possible set from another script?)
+local const = {
+	max_heigth = 00,
+	pos_y_offset = 20,
+	pos_y_max = 00,
+	pos_y_min = 00
+}
+
+local vals = { -- In Game Values (possible set from another script?)
 	height = 2999,
 	temp = -2
 }
@@ -9,6 +18,13 @@ local ingame_values = { -- In Game Values (possible set from another script?)
 function init(self)
 	msg.post(".", "acquire_input_focus")
 
+	do
+		local screen_size = { window.get_size() }
+		const.max_heigth = screen_size[2]
+		const.pos_y_max = const.max_heigth - const.pos_y_offset
+		const.pos_y_min = 0 + const.pos_y_offset
+	end
+	
 	-- Operational parts of GUI
 	nodes.control_zone_down = gui.get_node("control_zone_down")
 	nodes.control_zone_up = gui.get_node("control_zone_up")
@@ -29,18 +45,26 @@ function final(self)
 end
 
 function update(self, dt)
-	local temp_sign = (ingame_values.temp >= 0) and "+" or ""
-	local heigh_text = "height:" .. ingame_values.height .. " m" .. "\n" .. "temp: " .. temp_sign .. ingame_values.temp  .. " C"
-	local distance_text = "Distance ->: " .. ingame_values.distance .. " m"
+	local temp_sign = (vals.temp >= 0) and "+" or ""
+	local heigh_text = "height:" .. vals.height .. " m" .. "\n" .. "temp: " .. temp_sign .. vals.temp  .. " C"
+	local distance_text = "Distance ->: " .. vals.distance .. " m"
 	gui.set_text(nodes.height, heigh_text)
 	gui.set_text(nodes.distance, distance_text)
+	local new_pos = gui.get_position(nodes.position)
+	new_pos.y = const.max_heigth - const.max_heigth * do_math.rev_lerp_number(vals.height, const.height_floor, const.height_ceil )
+	new_pos.y = do_math.clamp_number(new_pos.y, const.pos_y_max, const.pos_y_min)
+	gui.set_position(nodes.position, new_pos)
 end
 
 function on_message(self, message_id, message, sender)
 	if message_id == hash("hud") then
-		ingame_values.height = message.height - message.height % 1 -- show only integer value
-		ingame_values.temp = message.temp - message.temp % 1
-		ingame_values.distance = message.dist - message.dist % 1
+		vals.height = message.height - message.height % 1 -- show only integer value
+		vals.temp = message.temp - message.temp % 1
+		vals.distance = message.dist - message.dist % 1
+	elseif message_id == hash("constants") then
+		for key, val in pairs(message) do
+			const[key] = message[key]
+		end
 	end
 end
 

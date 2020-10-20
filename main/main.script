@@ -14,7 +14,10 @@ local const = {
 	back_start = 900,
 	back_width = 7680,
 	pix_coef = 00,
-	speed_save = 0.75
+	speed_save = 0.75,
+	fire_max = 0.25,
+	fire_min = 0.05,
+	fire_speed = 0.5
 }
 
 -- Script inside variables
@@ -27,7 +30,9 @@ local vars = {
 	prev_speed = 00,
 	traveled_dist = 00,
 	prev_x = 00,
-	set_vert_speed = 00
+	set_vert_speed = 00,
+	fire_size = 00,
+	fire_enabled = false
 }
 
 go.property("height", 00)
@@ -41,7 +46,14 @@ function init(self)
 		back_dist = const.back_dist,
 		back_start = const.back_start
 	})
+	msg.post("/gui#generic", "constants", {
+		height_ceil = const.height_ceil,
+		height_floor = const.height_floor
+	})
 	const.pix_coef = (const.height_ceil - const.height_floor) / const.back_dist -- m/pix
+
+	msg.post("/fire", "disable")
+	vars.fire_enabled = false
 end
 
 function on_message(self, message_id, message, sender)
@@ -71,39 +83,55 @@ function update(self, dt)
 			speed_change = -const.descent_speed
 		end
 	end
-	vars.set_vert_speed = vars.set_vert_speed + speed_change * dt
-	vars.set_vert_speed = do_math.clamp_number(vars.set_vert_speed, const.ascent_lift, const.descent_lift)
+	local unclamped_vert_speed = vars.set_vert_speed + speed_change * dt
+	vars.set_vert_speed = do_math.clamp_number(unclamped_vert_speed, const.ascent_lift, const.descent_lift)
 	self.height = self.height + vars.set_vert_speed * dt
-
-	--used to repos back
+	go.set("/clouds#clouds", "height", self.height)
+	
+	-- reposition back position depended by height
 	local height_coef = do_math.rev_lerp_number(self.height, const.height_ceil, const.height_floor)
-
-	--update temp
-	vars.ballon_temp = vars.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
-
-	-- reposition back vec2 depended by height
 	local back_pos = go.get_position("/back")
-	--back_pos.x
-	local cumulative_speed = do_math.average(vars.back_speed)
+	local average_cloud_speed = do_math.average(vars.back_speed)
 	vars.back_speed = {} -- reset table to next frame
-	cumulative_speed = do_math.lerp_number(const.speed_save, cumulative_speed, vars.prev_speed)
-	vars.prev_speed = cumulative_speed
-	back_pos.x = back_pos.x - cumulative_speed * const.pix_coef * dt / 40
+	local corrected_speed = do_math.lerp_number(const.speed_save, average_cloud_speed, vars.prev_speed)
+	vars.prev_speed = corrected_speed
+	back_pos.x = back_pos.x - corrected_speed * const.pix_coef * dt / 40
 	-- back reposition
 	if back_pos.x > const.back_width * 0.5 then back_pos.x = back_pos.x - const.back_width
 	elseif back_pos.x < const.back_width * -1.5 then back_pos.x = back_pos.x + const.back_width
 	end
-	vars.traveled_dist = vars.traveled_dist - ( back_pos.x - vars.prev_x ) * const.pix_coef
-	vars.prev_x = back_pos.x
 	back_pos.y = const.back_start - const.back_dist * height_coef
 	go.set_position(back_pos, "/back")
-	--reposition clouds
-	go.set("/clouds#clouds", "height", self.height)
 
 	--update gui
+	vars.ballon_temp = vars.temp_today + do_math.lerp_number(height_coef, const.temp_ceil, const.temp_floor)
+	vars.traveled_dist = vars.traveled_dist - ( back_pos.x - vars.prev_x ) * const.pix_coef
+	vars.prev_x = back_pos.x
 	msg.post("/gui#generic", "hud", {
 		height = self.height,
 		temp = vars.ballon_temp,
 		dist = vars.traveled_dist
 	})
+
+	-- fire animation
+	local fire_scale = go.get_scale("/fire")
+	if vars.lift_state == "ascent" then
+		if vars.fire_enabled then
+			local new_scale = fire_scale.y + const.fire_speed * dt
+			fire_scale.y = do_math.clamp_number(new_scale, const.fire_max, const.fire_min)
+		else
+			msg.post("/fire", "enable")
+			vars.fire_enabled = true
+			fire_scale.y = const.fire_min
+		end
+	elseif vars.fire_enabled then
+		if fire_scale.y <= const.fire_min+0.001 then
+			msg.post("/fire", "disable")
+			vars.fire_enabled = false
+		else
+			local new_scale = fire_scale.y - const.fire_speed * dt
+			fire_scale.y = do_math.clamp_number(new_scale, const.fire_max, const.fire_min)
+		end
+	end
+	go.set_scale(fire_scale, "/fire")
 end
